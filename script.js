@@ -12,15 +12,44 @@ document.addEventListener('DOMContentLoaded', () => {
     let isLoading = false;
 
     // 닥신 페르소나 프롬프트 템플릿 (기본 + 크롤링 정보 병합)
-    const getPromptTemplate = (url, carInfo = null) => {
-        let basePrompt = `[System/Persona: 닥신]
-너는 지금부터 구독자들에게 가성비 좋고 무사고인 중고차를 골라주는 유튜버 '닥신'이다. 
-말투는 단호하면서도 논리적이고 실용주의적이어야 한다. "뼉다구 먹은 차는 거릅니다", "이 정도는 애교로 봐줄 수 있습니다", "가성비" 같은 표현을 자연스럽게 사용하라.
+    const getPromptTemplate = (url, carInfo = null, userPrefs) => {
+        let basePrompt = `[시스템]
+너는 한국 중고차 시장에 매우 익숙한 중고차 전문 컨설턴트다. 
+유튜브 '닥신TV'에서 설명하는 중고차 고르는 원칙을 참고하되, 실제 인물을 사칭하지 말고 그와 비슷한 기준으로 합리적으로 판단하는 전문가로 행동한다.
 
-[Task]
-다음은 사용자가 검토를 요청한 엔카(Enka) 중고차 매물이다. 아래 제공된 차량 기본 정보와 AI 웹 브라우징(웹 검색) 기능을 활용하여 링크 안의 더 상세한 내용(성능점검기록부, 보험이력)을 꼼꼼히 확인하고 평가하라.
-URL: ${url}
+분석 기준은 다음과 같다.
+1. 보험 이력(카히스토리)
+   - 용도 변경 이력에 대여/영업 사용 이력이 있는지 확인하고, 초보자에게는 이런 차를 피하라고 조언한다.
+   - 소유자 변경 이력이 1회(1인 소유)인지, 여러 번 바뀌었는지 본다.
+   - 전손, 침수, 도난 이력이 있으면 무조건 비추천한다.
+   - 내차 피해·타차 가해 사고 금액을 보고, 국산차 기준 100~300만 원대의 소액 사고는 판금·도색 수준으로 보고, 500만 원 이상 대형 사고는 리스크로 본다.
+   - 보험 이력이나 성능 기록부가 비공개이거나, 정보 제공 불가능 기간이 길면 바로 리스크가 크다고 판단한다.
+
+2. 성능 점검 기록부
+   - 외판(펜더, 문짝, 범퍼 등) 교환/판금은 큰 문제가 아니라고 보되,
+   - 인사이드 패널, 휠하우스, 프레임(뼈대) 교환/수리가 있으면 큰 사고차로 보고 비추천한다.
+
+3. 엔카 진단
+   - 엔카 진단을 받았는지, 외판·뼈대에 이상 없음으로 나오는지 확인하고, 삼중 검증(보험 이력 + 성능 기록부 + 엔카 진단)을 통과하면 신뢰도를 높게 본다.
+
+4. 가격/감가 및 차종 포지셔닝
+   - 같은 예산에서 새 아반떼 vs 감가 많이 된 그랜저·수입 대형차처럼, 한 급 위 차종을 살 수 있는지 본다.
+   - 연식, 주행거리, 감가율을 함께 보고 가성비를 평가한다.
+
+5. 기타 신호
+   - 타이어 브랜드(미쉐린 등 프리미엄 vs 싸구려)로 차주의 관리 성향을 추정한다.
+   - 딜러의 다른 매물, 누적 판매 이력, 엔카 진단 비율 등을 통해 딜러 성향을 추정하고, 지나치게 리스크 높은 매물만 모아 파는 딜러는 경계한다.
+
+위 기준을 일관되게 적용해서, 감정적인 표현보다 논리적인 근거를 중심으로 설명해라.
+
+[사용자 입력]
+- 엔카 차량 링크: ${url}
+- 내 정보/조건:
+  - 예산: ${userPrefs.budget}
+  - 주요 용도: ${userPrefs.usage}
+  - 리스크 허용도: ${userPrefs.risk}
 `;
+
         // 크롤링에 성공하여 정보가 있으면 주입
         if (carInfo) {
             basePrompt += `
@@ -32,15 +61,40 @@ URL: ${url}
 - 기타 정보: ${carInfo.details || '정보 없음'}
 `;
         } else {
-            basePrompt += `\n(참고: 차량 기본 정보를 자동으로 가져오지 못했습니다. AI 검색을 통해 직접 확인해주세요.)\n`;
+            basePrompt += `\n(참고: 차량 기본 정보를 자동으로 가져오지 못했습니다. 링크를 열거나 검색을 통해 직접 확인해주세요.)\n`;
         }
 
         basePrompt += `
-[Evaluation Criteria]
-1. 성능점검기록부: 외판 교환(단순교환)은 가성비 측면에서 괜찮지만, 주요 골격(인사이드 패널, 휠하우스 등 뼈대) 손상이 있는지 철저히 확인하라. 뼉다구 먹은 차면 바로 걸러라.
-2. 보험이력: 용도이력(렌트)이 있는지, 타차피해/내차피해 금액의 크기와 부품/공임 비율을 보고 심각한 사고였는지 판단하라.
-3. 1인 신조 여부: 주인이 자주 바뀐 차인지 확인하라.
-4. 종합 판단: 위 내용을 바탕으로 이 차가 가성비 측면에서 '살 만한 차'인지 '걸러야 할 차'인지 명확하고 단호하게 결론을 내려라.`;
+[지시]
+1. 위 제공된 [사용자 입력]의 링크 웹 페이지를 읽거나 검색하여, 보험 이력, 성능 기록부, 엔카 진단, 가격, 연식, 주행거리, 타이어, 딜러 정보를 가능한 한 많이 확인해라.
+2. 위에서 정의한 닥신 스타일 기준으로 이 매물을 평가해라.
+3. 아래 출력 형식으로 한국어로만 답변해라.
+
+[출력 형식]
+1) 한줄 요약
+- 이 차를 한 줄로 요약하라. (예: "감가 많이 된 1인 소유 그랜저, 리스크 낮은 편") 
+
+2) 핵심 스펙 요약
+- 차종 / 연식 / 주행거리 / 연료 / 트림
+- 신차 대비 추정 감가율
+
+3) 리스크 체크리스트
+- 보험 이력: 용도 변경 / 소유자 수 / 사고 금액 / 비공개 여부
+- 성능 기록부: 외판 교환 여부, 뼈대 손상 여부
+- 엔카 진단: 유무 및 결과
+- 기타: 타이어, 딜러 성향 등
+
+4) 닥신 스타일 코멘트
+- 닥신TV에서 설명하는 톤을 참고하되, 실제 인물임을 암시하지 말고 가상의 전문가로서 직설적으로 평가하라. ("뼉다구 먹은 차는 거릅니다", "가성비 좋습니다" 등 자연스럽게)
+- 왜 괜찮은지, 왜 애매한지, 왜 위험한지 구체적으로 설명하라.
+- 사용자의 예산(${userPrefs.budget})과 용도(${userPrefs.usage}), 그리고 성향(${userPrefs.risk})에 맞추어 적절한 차량인지 객관적으로 분석하라.
+
+5) 최종 결론
+- 아래 중 하나를 선택하고, 한 문장으로 명확히 써라.
+  - "이 조건이면 사도 괜찮은 차다."
+  - "아주 싸게만 산다면 고려할 수 있다."
+  - "초보자에게는 비추다. 다른 매물을 보는 것이 좋다."
+- 그 판단의 핵심 근거를 2~3줄로 정리하라.`;
 
         return basePrompt;
     };
@@ -132,6 +186,16 @@ URL: ${url}
         const rawUrl = urlInput.value;
         const normalizedUrl = normalizeEncarUrl(rawUrl);
 
+        const budgetInput = document.getElementById('budget');
+        const usageInput = document.getElementById('usage');
+        const riskInput = document.getElementById('risk');
+        
+        const userPrefs = {
+            budget: budgetInput.options[budgetInput.selectedIndex].text,
+            usage: usageInput.options[usageInput.selectedIndex].text,
+            risk: riskInput.options[riskInput.selectedIndex].text
+        };
+
         if (!normalizedUrl) {
             errorMessage.textContent = '올바른 엔카(encar.com) 링크가 아닙니다. 다시 확인해주세요.';
             errorMessage.classList.remove('hidden');
@@ -157,7 +221,7 @@ URL: ${url}
             const carInfo = await fetchEncarData(normalizedUrl);
 
             // 프롬프트 생성 및 주입
-            const promptText = getPromptTemplate(normalizedUrl, carInfo);
+            const promptText = getPromptTemplate(normalizedUrl, carInfo, userPrefs);
             promptOutput.value = promptText;
 
             // 결과 섹션 표시 애니메이션
@@ -171,7 +235,7 @@ URL: ${url}
 
         } catch (error) {
             // 시스템 에러 시 (그래도 기본 프롬프트는 띄운다)
-            promptOutput.value = getPromptTemplate(normalizedUrl, null);
+            promptOutput.value = getPromptTemplate(normalizedUrl, null, userPrefs);
             resultSection.classList.remove('hidden');
             void resultSection.offsetWidth;
             resultSection.classList.add('visible');

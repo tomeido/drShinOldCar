@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,9 +8,11 @@
     <meta name="description" content="엔카 중고차 링크를 입력하면 닥신 AI 평가 프롬프트를 생성해주는 툴입니다.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <div class="background-effects">
         <div class="glow glow-1"></div>
@@ -21,26 +24,60 @@
         <header class="header">
             <div class="badge">AI Agent Prompt</div>
             <h1>닥신 AI 프롬프트 생성기</h1>
-            <p>엔카 매물 링크를 입력하면 ChatGPT, Claude 등에서 사용할 수 있는 <br><span class="highlight">닥신 전용 평가 프롬프트</span>를 만들어 드립니다.</p>
+            <p>엔카 매물 링크를 입력하면 ChatGPT, Claude 등에서 사용할 수 있는 <br><span class="highlight">닥신 전용 평가 프롬프트</span>를 만들어 드립니다.
+            </p>
         </header>
 
         <section class="input-section glass-panel">
             <div class="input-group">
                 <label for="encar-url">엔카(Enka) 매물 링크</label>
                 <div class="input-wrapper">
-                    <svg class="icon-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg class="icon-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
                         <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
                         <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
                     </svg>
-                    <input type="url" id="encar-url" placeholder="https://encar.com/dc/dc_cardetailview.do?..." autocomplete="off">
+                    <input type="url" id="encar-url" placeholder="https://encar.com/dc/dc_cardetailview.do?..."
+                        autocomplete="off">
                 </div>
                 <button id="generate-btn" class="primary-btn">
                     <span>프롬프트 생성하기</span>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="m9 18 6-6-6-6"/>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="m9 18 6-6-6-6" />
                     </svg>
                 </button>
             </div>
+
+            <div class="user-options">
+                <div class="option-group">
+                    <label for="budget">예산</label>
+                    <select id="budget" class="glass-select">
+                        <option value="천만원 이하">1,000만원 이하 (가성비 최우선)</option>
+                        <option value="1천~2천만원">1,000만 ~ 2,000만원 (준중형/중형)</option>
+                        <option value="2천~3천만원">2,000만 ~ 3,000만원 (그랜저급/소형SUV)</option>
+                        <option value="3천만원 이상">3,000만원 이상 (대형/수입/고급)</option>
+                    </select>
+                </div>
+                <div class="option-group">
+                    <label for="usage">주요 용도</label>
+                    <select id="usage" class="glass-select">
+                        <option value="출퇴근">출퇴근 (연비/잔고장 중요)</option>
+                        <option value="패밀리카">패밀리카 (안전/공간 중요)</option>
+                        <option value="주말용">주말 장거리/여행용</option>
+                        <option value="첫차/연습용">첫차 및 운전 연습용 (감가 방어)</option>
+                    </select>
+                </div>
+                <div class="option-group">
+                    <label for="risk">리스크 성향</label>
+                    <select id="risk" class="glass-select">
+                        <option value="안전제일(보수적)">안전제일 (무사고, 1인신조, 뼉다구 절대 불가)</option>
+                        <option value="보통(가성비타협)">보통 (적당한 감가, 외판 단순교환 정도는 허용)</option>
+                        <option value="공격적(극가성비)">공격적 (저렴하다면 뼉다구 수리도 감수)</option>
+                    </select>
+                </div>
+            </div>
+
             <div id="error-message" class="error-message hidden">유효한 엔카 주소를 입력해주세요.</div>
         </section>
 
@@ -48,7 +85,8 @@
             <div class="result-header">
                 <h2>생성된 소울(Soul) 프롬프트</h2>
                 <button id="copy-btn" class="icon-btn tooltip" data-tooltip="클립보드에 복사">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                     </svg>
@@ -58,14 +96,15 @@
             <div class="prompt-container">
                 <textarea id="prompt-output" readonly></textarea>
                 <div class="copy-success-overlay">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
                         <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
                     <span>복사 완료! ChatGPT에 붙여넣으세요.</span>
                 </div>
             </div>
         </section>
-        
+
         <footer class="footer">
             <p>Inspired by 닥신TV &middot; Powered by AI</p>
             <p class="sub-text">※ 이 프롬프트는 AI 웹 브라우징 기능이 있는 모델(GPT-4 등)에서 가장 잘 동작합니다.</p>
@@ -74,4 +113,5 @@
 
     <script src="script.js"></script>
 </body>
+
 </html>
