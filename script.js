@@ -143,6 +143,8 @@ document.addEventListener('DOMContentLoaded', () => {
 - 가격: ${carInfo.price || '정보 없음'}
 - 연식: ${carInfo.year || '정보 없음'}
 - 주행거리: ${carInfo.mileage || '정보 없음'}
+- 연료: ${carInfo.fuel || '정보 없음'}
+- 색상: ${carInfo.color || '정보 없음'}
 - 기타 정보: ${carInfo.details || '정보 없음'}`
             : `(참고: 차량 기본 정보를 자동으로 가져오지 못했습니다. 링크를 직접 열어 확인해주세요.)`;
 
@@ -259,6 +261,10 @@ ${carInfoStr}
     // URL 유효성 검사 및 크롤링
     // ═══════════════════════════════════════════════════════════
 
+    /**
+     * 엔카 URL을 정규화하고, fem.encar.com 형식의 URL도 함께 반환한다.
+     * fem.encar.com은 UTF-8 og: 메타태그를 제공하여 크롤링에 유리하다.
+     */
     const normalizeEncarUrl = (urlStr) => {
         let url = urlStr.trim();
         if (!/^https?:\/\//i.test(url)) {
@@ -266,50 +272,179 @@ ${carInfoStr}
         }
         try {
             const parsed = new URL(url);
-            if (parsed.hostname.includes('encar.com')) {
-                return url;
-            }
-        } catch (e) { /* 파싱 실패 */ }
+            if (!parsed.hostname.includes('encar.com')) return null;
+            return url;
+        } catch (e) { return null; }
+    };
+
+    /**
+     * 엔카 URL에서 차량 ID(carid)를 추출한다.
+     * 지원 형식:
+     *   - www.encar.com/dc/dc_cardetailview.do?carid=12345678
+     *   - fem.encar.com/cars/detail/12345678
+     */
+    const extractCarId = (url) => {
+        // fem.encar.com 형식
+        const femMatch = url.match(/fem\.encar\.com\/cars\/detail\/(\d+)/);
+        if (femMatch) return femMatch[1];
+
+        // 기존 encar.com 형식 (query string에서 carid 추출)
+        try {
+            const parsed = new URL(url);
+            const carid = parsed.searchParams.get('carid');
+            if (carid && /^\d+$/.test(carid)) return carid;
+        } catch (e) { /* ignore */ }
+
+        // URL 경로나 쿼리에서 숫자 ID 패턴 추출 시도
+        const idMatch = url.match(/[\?&]carid=(\d+)/);
+        if (idMatch) return idMatch[1];
+
         return null;
     };
 
-    const fetchEncarData = async (targetUrl) => {
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-        try {
-            const response = await fetch(proxyUrl);
-            if (!response.ok) throw new Error('Network response was not ok');
-            const data = await response.json();
-            const htmlString = data.contents;
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(htmlString, 'text/html');
+    /**
+     * CORS 프록시를 통해 HTML을 가져온다.
+     * 여러 무료 프록시를 순차적으로 시도하여 안정성을 높인다.
+     */
+    const fetchWithProxy = async (targetUrl) => {
+        const proxies = [
+            (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+            (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+            (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+        ];
 
+        for (const makeUrl of proxies) {
             try {
-                const titleEl = doc.querySelector('.prod_name .name') || doc.querySelector('h1');
-                const priceEl = doc.querySelector('.prod_price .reg') || doc.querySelector('.price');
-                const detailItems = Array.from(doc.querySelectorAll('.prod_item li') || []);
+                const proxyUrl = makeUrl(targetUrl);
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 8000);
 
-                const title = titleEl ? titleEl.textContent.trim().replace(/\s+/g, ' ') : null;
-                const price = priceEl ? priceEl.textContent.trim().replace(/\s+/g, ' ') : null;
+                const response = await fetch(proxyUrl, { signal: controller.signal });
+                clearTimeout(timeout);
 
-                let detailsStr = '';
-                if (detailItems.length > 0) {
-                    detailsStr = detailItems.map(item => item.textContent.trim()).join(' / ');
-                } else {
-                    const metaDesc = doc.querySelector('meta[name="description"]');
-                    if (metaDesc) detailsStr = metaDesc.content;
+                if (!response.ok) continue;
+
+                // allorigins는 JSON { contents: "..." } 형식
+                const contentType = response.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    const data = await response.json();
+                    return data.contents || null;
                 }
-
-                if (title) {
-                    return {
-                        title, price, details: detailsStr,
-                        year: '상세 정보 참조',
-                        mileage: '상세 정보 참조'
-                    };
-                }
+                // 나머지 프록시는 HTML 직접 반환
+                return await response.text();
             } catch (e) {
-                console.warn("DOM 추출 중 에러:", e);
+                console.warn(`프록시 실패 (${makeUrl.toString().substring(0, 40)}...):`, e.message);
+                continue;
             }
-            return null;
+        }
+        return null;
+    };
+
+    /**
+     * og: 메타태그와 title, HTML 텍스트에서 차량 정보를 파싱한다.
+     * 엔카는 CSS Module 해시 클래스명을 사용하므로 고정 CSS 셀렉터가 작동하지 않는다.
+     * 대신 og:title, og:description 등 메타태그에 구조화된 정보가 들어있다.
+     *
+     * 예시:
+     *   og:title       = "뉴SM5 플래티넘 디젤 D 스페셜 대구 중고차 : 내차팔기·내차사기"
+     *   og:description = "연식:14년 07월 , 주행거리:148,841km, 연료:디젤, 색상:흰색, 지역:대구 중고차"
+     */
+    const parseCarInfoFromHtml = (htmlString) => {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlString, 'text/html');
+
+        // 1) og:title → 차량명
+        const ogTitle = doc.querySelector('meta[property="og:title"]');
+        const ogDesc = doc.querySelector('meta[property="og:description"]');
+        const pageTitle = doc.querySelector('title');
+
+        let title = null;
+        if (ogTitle && ogTitle.content) {
+            // "뉴SM5 플래티넘 디젤 D 스페셜 대구 중고차 : 내차팔기·내차사기" → 차량명 추출
+            title = ogTitle.content
+                .replace(/\s*:?\s*내차팔기.*$/i, '')
+                .replace(/\s*중고차\s*$/, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+            // 지역명(마지막 단어)이 남아있으면 제거 시도
+            const regionPatterns = /\s+(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)\s*$/;
+            title = title.replace(regionPatterns, '').trim();
+        } else if (pageTitle && pageTitle.textContent) {
+            title = pageTitle.textContent
+                .replace(/\s*[\|:]\s*엔카.*$/i, '')
+                .replace(/\s*중고차.*$/i, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        // 2) og:description → 연식, 주행거리, 연료, 색상
+        let year = null, mileage = null, fuel = null, color = null, details = '';
+        if (ogDesc && ogDesc.content) {
+            const desc = ogDesc.content;
+            details = desc;
+
+            const yearMatch = desc.match(/연식\s*:\s*([^,]+)/);
+            if (yearMatch) year = yearMatch[1].trim();
+
+            const mileageMatch = desc.match(/주행거리\s*:\s*([^,]+)/);
+            if (mileageMatch) mileage = mileageMatch[1].trim();
+
+            const fuelMatch = desc.match(/연료\s*:\s*([^,]+)/);
+            if (fuelMatch) fuel = fuelMatch[1].trim();
+
+            const colorMatch = desc.match(/색상\s*:\s*([^,]+)/);
+            if (colorMatch) color = colorMatch[1].trim();
+        }
+
+        // 3) 가격 추출: HTML 텍스트에서 "NNN만원" 패턴 찾기
+        let price = null;
+        const priceMatch = htmlString.match(/(\d{1,5},?\d*)\s*만\s*원/);
+        if (priceMatch) {
+            price = priceMatch[1].replace(/,/g, '') + '만원';
+        }
+
+        if (!title) return null;
+
+        return {
+            title,
+            price,
+            year: year || '정보 없음',
+            mileage: mileage || '정보 없음',
+            fuel: fuel || null,
+            color: color || null,
+            details: details || '정보 없음'
+        };
+    };
+
+    /**
+     * 엔카 차량 상세 정보를 크롤링한다.
+     * 1) URL에서 차량 ID 추출 → fem.encar.com 형식으로 변환 (UTF-8 og: 태그 지원)
+     * 2) CORS 프록시를 통해 HTML 가져오기
+     * 3) og: 메타태그 + HTML 텍스트에서 차량 정보 파싱
+     */
+    const fetchEncarData = async (targetUrl) => {
+        try {
+            // 차량 ID 추출하여 fem.encar.com URL 생성 (더 안정적인 og: 태그 제공)
+            const carId = extractCarId(targetUrl);
+            const fetchUrl = carId
+                ? `https://fem.encar.com/cars/detail/${carId}`
+                : targetUrl;
+
+            console.log('크롤링 대상 URL:', fetchUrl);
+
+            const htmlString = await fetchWithProxy(fetchUrl);
+            if (!htmlString) {
+                console.warn('모든 프록시에서 HTML 가져오기 실패');
+                return null;
+            }
+
+            const carInfo = parseCarInfoFromHtml(htmlString);
+            if (carInfo) {
+                console.log('차량 정보 추출 성공:', carInfo);
+            } else {
+                console.warn('HTML에서 차량 정보를 찾을 수 없음');
+            }
+            return carInfo;
         } catch (error) {
             console.error('크롤링 실패:', error);
             return null;
