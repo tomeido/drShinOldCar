@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dakshin AI Prompt Generator</title>
-    <meta name="description" content="엔카 중고차 링크를 입력하면 닥신 AI 평가 프롬프트를 생성해주는 툴입니다.">
+    <title>닥신 소환기 — AI 중고차 평가 프롬프트 생성기</title>
+    <meta name="description" content="엔카 중고차 링크를 입력하면 닥신 AI 평가 프롬프트를 생성해주는 툴입니다. ChatGPT, Claude 등에 붙여넣기만 하세요.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap"
@@ -22,15 +22,24 @@
 
     <main class="container">
         <header class="header">
-            <div class="badge">AI Agent Prompt</div>
-            <h1>닥신 AI 프롬프트 생성기</h1>
+            <div class="badge">AI Agent Prompt Generator</div>
+            <h1>🚗 닥신 소환기</h1>
             <p>엔카 매물 링크를 입력하면 ChatGPT, Claude 등에서 사용할 수 있는 <br><span class="highlight">닥신 전용 평가 프롬프트</span>를 만들어 드립니다.
             </p>
+            <button id="guide-open-btn" class="guide-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                <span>사용법 안내</span>
+            </button>
         </header>
 
         <section class="input-section glass-panel">
             <div class="input-group">
-                <label for="encar-url">엔카(Enka) 매물 링크</label>
+                <label for="encar-url">엔카(Encar) 매물 링크</label>
                 <div class="input-wrapper">
                     <svg class="icon-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
@@ -40,13 +49,6 @@
                     <input type="url" id="encar-url" placeholder="https://encar.com/dc/dc_cardetailview.do?..."
                         autocomplete="off">
                 </div>
-                <button id="generate-btn" class="primary-btn">
-                    <span>프롬프트 생성하기</span>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <path d="m9 18 6-6-6-6" />
-                    </svg>
-                </button>
             </div>
 
             <div class="user-options">
@@ -78,13 +80,46 @@
                 </div>
             </div>
 
+            <!-- 출력 모드 선택 -->
+            <div class="output-mode-section">
+                <label class="output-mode-label">출력 형식</label>
+                <div class="output-mode-group">
+                    <label class="mode-radio">
+                        <input type="radio" name="output-mode" value="unified" checked>
+                        <span class="radio-mark"></span>
+                        <span class="radio-label">ChatGPT / Gemini용 <small>(통합 프롬프트)</small></span>
+                    </label>
+                    <label class="mode-radio">
+                        <input type="radio" name="output-mode" value="split">
+                        <span class="radio-mark"></span>
+                        <span class="radio-label">Claude Projects용 <small>(시스템 + 유저 분리)</small></span>
+                    </label>
+                </div>
+            </div>
+
+            <button id="generate-btn" class="primary-btn">
+                <span>🔮 닥신 소환하기</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <path d="m9 18 6-6-6-6" />
+                </svg>
+            </button>
+
             <div id="error-message" class="error-message hidden">유효한 엔카 주소를 입력해주세요.</div>
         </section>
 
+        <!-- 결과 섹션 -->
         <section id="result-section" class="result-section glass-panel hidden">
+            <!-- 탭 바 -->
+            <div class="tab-bar">
+                <button class="tab-btn active" data-tab="full">전체 프롬프트</button>
+                <button class="tab-btn" data-tab="simple">간단 프롬프트</button>
+                <button class="tab-btn" data-tab="explain">구조 설명</button>
+            </div>
+
             <div class="result-header">
-                <h2>생성된 소울(Soul) 프롬프트</h2>
-                <button id="copy-btn" class="icon-btn tooltip" data-tooltip="클립보드에 복사">
+                <h2 id="result-title">생성된 프롬프트</h2>
+                <button id="copy-btn" class="icon-btn">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                         stroke-linejoin="round">
                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -93,23 +128,112 @@
                     <span class="btn-text">복사하기</span>
                 </button>
             </div>
-            <div class="prompt-container">
-                <textarea id="prompt-output" readonly></textarea>
-                <div class="copy-success-overlay">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>
-                    <span>복사 완료! ChatGPT에 붙여넣으세요.</span>
+
+            <!-- 탭 콘텐츠 -->
+            <div class="tab-content active" id="tab-full">
+                <div class="prompt-container">
+                    <textarea id="prompt-output-full" readonly></textarea>
                 </div>
+            </div>
+            <div class="tab-content" id="tab-simple">
+                <div class="prompt-container">
+                    <textarea id="prompt-output-simple" readonly></textarea>
+                </div>
+            </div>
+            <div class="tab-content" id="tab-explain">
+                <div class="prompt-container">
+                    <div id="prompt-explain" class="explain-content"></div>
+                </div>
+            </div>
+
+            <div class="copy-success-overlay">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span>복사 완료! AI에 붙여넣으세요.</span>
+            </div>
+        </section>
+
+        <!-- 닥신 소개 섹션 -->
+        <section class="daksin-intro glass-panel">
+            <div class="intro-icon">🎬</div>
+            <h3>닥신(닥터 신재욱)이란?</h3>
+            <p>유튜브 <strong>'닥신TV'</strong>의 중고차 전문가 채널에서 강조하는 핵심 원칙들을 AI 프롬프트에 녹였습니다. 보험 이력, 성능점검기록부, 엔카 진단, 감가/가성비 분석을
+                일관된 기준으로 평가합니다.</p>
+            <div class="intro-links">
+                <a href="https://www.youtube.com/watch?v=kgw4WmXrDRw" target="_blank" rel="noopener" class="intro-link">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z" />
+                        <polygon fill="#fff" points="9.545 15.568 15.818 12 9.545 8.432" />
+                    </svg>
+                    닥신TV 유튜브
+                </a>
+                <a href="https://github.com/tomeido/drShinOldCar" target="_blank" rel="noopener"
+                    class="intro-link github-link">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                    </svg>
+                    GitHub
+                </a>
             </div>
         </section>
 
         <footer class="footer">
             <p>Inspired by 닥신TV &middot; Powered by AI</p>
-            <p class="sub-text">※ 이 프롬프트는 AI 웹 브라우징 기능이 있는 모델(GPT-4 등)에서 가장 잘 동작합니다.</p>
+            <p class="sub-text">※ 이 프롬프트는 AI 웹 브라우징 기능이 있는 모델(GPT-4, Gemini 등)에서 가장 잘 동작합니다.</p>
+            <p class="disclaimer">⚠️ 이 서비스는 참고용이며, 법적·정비적 책임을 지지 않습니다. 최종 결정은 반드시 사용자가 직접 내려야 합니다.</p>
         </footer>
     </main>
+
+    <!-- 사용법 안내 모달 -->
+    <div id="guide-modal" class="modal-overlay hidden">
+        <div class="modal-content glass-panel">
+            <button id="guide-close-btn" class="modal-close-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+            <h2>📖 사용법 안내</h2>
+            <div class="guide-steps">
+                <div class="guide-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>엔카 링크 입력</h4>
+                        <p><a href="https://www.encar.com" target="_blank" rel="noopener">encar.com</a>에서 관심 있는 차량의 상세
+                            페이지 URL을 복사하여 입력합니다.</p>
+                    </div>
+                </div>
+                <div class="guide-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>구매 조건 설정</h4>
+                        <p>예산, 주요 용도, 리스크 허용도를 선택합니다. 출력 형식도 사용할 AI에 맞게 선택하세요.</p>
+                    </div>
+                </div>
+                <div class="guide-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>프롬프트 생성 & 복사</h4>
+                        <p>"닥신 소환하기" 버튼을 누르면 프롬프트가 생성됩니다. 복사 버튼을 클릭하세요.</p>
+                    </div>
+                </div>
+                <div class="guide-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h4>AI에 붙여넣기</h4>
+                        <p><strong>ChatGPT / Gemini</strong>: 채팅 입력창에 그대로 붙여넣기<br>
+                            <strong>Claude Projects</strong>: "시스템 프롬프트"와 "유저 프롬프트"를 분리 형식으로 선택하여 각각 설정에 입력
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="script.js"></script>
 </body>
