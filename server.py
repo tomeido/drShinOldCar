@@ -9,7 +9,7 @@ import sys
 import io
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from scrapling.fetchers import Fetcher
+from scrapling.fetchers import StealthyFetcher
 
 # Windows 콘솔 인코딩 문제 해결
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
@@ -144,8 +144,8 @@ def encar_crawl():
     fetch_url = f'https://fem.encar.com/cars/detail/{car_id}' if car_id else target_url
 
     try:
-        print(f'[Scrapling] 크롤링 시작: {fetch_url}')
-        page = Fetcher.get(fetch_url, stealthy_headers=True, follow_redirects=True)
+        print(f'[StealthyFetcher] 크롤링 시작 (헤드리스 브라우저): {fetch_url}')
+        page = StealthyFetcher.fetch(fetch_url, headless=True, network_idle=True)
 
         if page is None:
             return jsonify({'success': False, 'data': None, 'error': 'Scrapling 응답이 None입니다.'}), 502
@@ -153,14 +153,14 @@ def encar_crawl():
         car_info = parse_car_info(page)
 
         if car_info:
-            print(f'[Scrapling] 차량 정보 추출 성공: {car_info["title"]}')
+            print(f'[StealthyFetcher] 차량 정보 추출 성공: {car_info["title"]}')
             return jsonify({'success': True, 'data': car_info, 'error': None})
         else:
-            print('[Scrapling] HTML에서 차량 정보를 찾을 수 없음')
+            print('[StealthyFetcher] HTML에서 차량 정보를 찾을 수 없음')
             return jsonify({'success': False, 'data': None, 'error': 'HTML에서 차량 정보를 추출할 수 없습니다.'}), 404
 
     except Exception as e:
-        print(f'[Scrapling] 크롤링 에러: {e}')
+        print(f'[StealthyFetcher] 크롤링 에러: {e}')
         return jsonify({'success': False, 'data': None, 'error': str(e)}), 500
 
 
