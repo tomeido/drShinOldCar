@@ -302,8 +302,43 @@ ${carInfoStr}
         return null;
     };
 
+    // ─── Scrapling 백엔드 서버 설정 ───
+    const BACKEND_URL = 'http://localhost:5000';
+
     /**
-     * CORS 프록시를 통해 HTML을 가져온다.
+     * Scrapling 기반 로컬 백엔드 서버를 통해 차량 정보를 가져온다.
+     * 서버가 실행 중이지 않으면 null을 반환한다.
+     */
+    const fetchFromBackend = async (targetUrl) => {
+        try {
+            const apiUrl = `${BACKEND_URL}/api/encar?url=${encodeURIComponent(targetUrl)}`;
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 15000);
+
+            const response = await fetch(apiUrl, { signal: controller.signal });
+            clearTimeout(timeout);
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                console.warn('백엔드 서버 응답 오류:', errorData.error || response.statusText);
+                return null;
+            }
+
+            const result = await response.json();
+            if (result.success && result.data) {
+                console.log('✅ Scrapling 백엔드에서 차량 정보 수신:', result.data);
+                return result.data;
+            }
+            console.warn('백엔드 응답에 차량 정보 없음:', result.error);
+            return null;
+        } catch (e) {
+            console.warn('백엔드 서버 연결 실패 (서버가 실행 중인지 확인하세요):', e.message);
+            return null;
+        }
+    };
+
+    /**
+     * CORS 프록시를 통해 HTML을 가져온다. (Fallback용)
      * 여러 무료 프록시를 순차적으로 시도하여 안정성을 높인다.
      */
     const fetchWithProxy = async (targetUrl) => {
@@ -324,16 +359,14 @@ ${carInfoStr}
 
                 if (!response.ok) continue;
 
-                // allorigins는 JSON { contents: "..." } 형식
                 const contentType = response.headers.get('content-type') || '';
                 if (contentType.includes('application/json')) {
                     const data = await response.json();
                     return data.contents || null;
                 }
-                // 나머지 프록시는 HTML 직접 반환
                 return await response.text();
             } catch (e) {
-                console.warn(`프록시 실패 (${makeUrl.toString().substring(0, 40)}...):`, e.message);
+                console.warn(`프록시 실패:`, e.message);
                 continue;
             }
         }
@@ -341,32 +374,23 @@ ${carInfoStr}
     };
 
     /**
-     * og: 메타태그와 title, HTML 텍스트에서 차량 정보를 파싱한다.
-     * 엔카는 CSS Module 해시 클래스명을 사용하므로 고정 CSS 셀렉터가 작동하지 않는다.
-     * 대신 og:title, og:description 등 메타태그에 구조화된 정보가 들어있다.
-     *
-     * 예시:
-     *   og:title       = "뉴SM5 플래티넘 디젤 D 스페셜 대구 중고차 : 내차팔기·내차사기"
-     *   og:description = "연식:14년 07월 , 주행거리:148,841km, 연료:디젤, 색상:흰색, 지역:대구 중고차"
+     * og: 메타태그와 HTML 텍스트에서 차량 정보를 파싱한다. (Fallback용)
      */
     const parseCarInfoFromHtml = (htmlString) => {
         const parser = new DOMParser();
         const doc = parser.parseFromString(htmlString, 'text/html');
 
-        // 1) og:title → 차량명
         const ogTitle = doc.querySelector('meta[property="og:title"]');
         const ogDesc = doc.querySelector('meta[property="og:description"]');
         const pageTitle = doc.querySelector('title');
 
         let title = null;
         if (ogTitle && ogTitle.content) {
-            // "뉴SM5 플래티넘 디젤 D 스페셜 대구 중고차 : 내차팔기·내차사기" → 차량명 추출
             title = ogTitle.content
                 .replace(/\s*:?\s*내차팔기.*$/i, '')
                 .replace(/\s*중고차\s*$/, '')
                 .replace(/\s+/g, ' ')
                 .trim();
-            // 지역명(마지막 단어)이 남아있으면 제거 시도
             const regionPatterns = /\s+(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)\s*$/;
             title = title.replace(regionPatterns, '').trim();
         } else if (pageTitle && pageTitle.textContent) {
@@ -377,26 +401,20 @@ ${carInfoStr}
                 .trim();
         }
 
-        // 2) og:description → 연식, 주행거리, 연료, 색상
         let year = null, mileage = null, fuel = null, color = null, details = '';
         if (ogDesc && ogDesc.content) {
             const desc = ogDesc.content;
             details = desc;
-
             const yearMatch = desc.match(/연식\s*:\s*([^,]+)/);
             if (yearMatch) year = yearMatch[1].trim();
-
             const mileageMatch = desc.match(/주행거리\s*:\s*([^,]+)/);
             if (mileageMatch) mileage = mileageMatch[1].trim();
-
             const fuelMatch = desc.match(/연료\s*:\s*([^,]+)/);
             if (fuelMatch) fuel = fuelMatch[1].trim();
-
             const colorMatch = desc.match(/색상\s*:\s*([^,]+)/);
             if (colorMatch) color = colorMatch[1].trim();
         }
 
-        // 3) 가격 추출: HTML 텍스트에서 "NNN만원" 패턴 찾기
         let price = null;
         const priceMatch = htmlString.match(/(\d{1,5},?\d*)\s*만\s*원/);
         if (priceMatch) {
@@ -404,10 +422,8 @@ ${carInfoStr}
         }
 
         if (!title) return null;
-
         return {
-            title,
-            price,
+            title, price,
             year: year || '정보 없음',
             mileage: mileage || '정보 없음',
             fuel: fuel || null,
@@ -418,19 +434,24 @@ ${carInfoStr}
 
     /**
      * 엔카 차량 상세 정보를 크롤링한다.
-     * 1) URL에서 차량 ID 추출 → fem.encar.com 형식으로 변환 (UTF-8 og: 태그 지원)
-     * 2) CORS 프록시를 통해 HTML 가져오기
-     * 3) og: 메타태그 + HTML 텍스트에서 차량 정보 파싱
+     * 1차: Scrapling 백엔드 서버 (localhost:5000)
+     * 2차 (Fallback): CORS 프록시
      */
     const fetchEncarData = async (targetUrl) => {
         try {
-            // 차량 ID 추출하여 fem.encar.com URL 생성 (더 안정적인 og: 태그 제공)
+            // 1차 시도: Scrapling 백엔드 서버
+            console.log('🔄 Scrapling 백엔드 서버로 크롤링 시도...');
+            const backendResult = await fetchFromBackend(targetUrl);
+            if (backendResult) {
+                return backendResult;
+            }
+
+            // 2차 시도: CORS 프록시 (Fallback)
+            console.log('🔄 백엔드 사용 불가 — CORS 프록시로 Fallback...');
             const carId = extractCarId(targetUrl);
             const fetchUrl = carId
                 ? `https://fem.encar.com/cars/detail/${carId}`
                 : targetUrl;
-
-            console.log('크롤링 대상 URL:', fetchUrl);
 
             const htmlString = await fetchWithProxy(fetchUrl);
             if (!htmlString) {
@@ -440,7 +461,7 @@ ${carInfoStr}
 
             const carInfo = parseCarInfoFromHtml(htmlString);
             if (carInfo) {
-                console.log('차량 정보 추출 성공:', carInfo);
+                console.log('차량 정보 추출 성공 (프록시):', carInfo);
             } else {
                 console.warn('HTML에서 차량 정보를 찾을 수 없음');
             }
