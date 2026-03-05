@@ -91,20 +91,26 @@ def parse_car_info(page) -> dict | None:
         if color_match:
             color = color_match.group(1).strip()
 
-    # 3) 가격 추출: HTML 본문에서 "NNN만원" 패턴
+    # 3) 가격 추출: HTML 태그를 제거하여 "NNN만원" 패턴 찾기
     price = None
     try:
         html_text = page.body.html if hasattr(page, 'body') and page.body else str(page)
     except Exception:
         html_text = str(page)
-    price_match = re.search(r'(\d{1,5},?\d*)\s*만\s*원', html_text)
+        
+    text_only = re.sub(r'<[^>]*>', ' ', html_text)
+    text_only = re.sub(r'\s+', ' ', text_only) # 공백 정규화 (엔터 등)
+    
+    # "3,500만원", "1억 2,500 만원" 등의 패턴 매치
+    price_match = re.search(r'((?:\d+\s*억\s*)?\d{1,5}(?:,\d{3})*|\d+)\s*만\s*원', text_only)
     if price_match:
-        price = price_match.group(1).replace(',', '') + '만원'
-    # og:description에서도 가격 시도
+        price = price_match.group(1).replace(',', '').replace(' ', '') + '만원'
+        
+    # og:description에서도 가격 시도 (만약 HTML 본문에서 못 찾았다면)
     if not price and details:
-        price_match2 = re.search(r'(\d{1,5},?\d*)\s*만\s*원', details)
+        price_match2 = re.search(r'((?:\d+\s*억\s*)?\d{1,5}(?:,\d{3})*|\d+)\s*만\s*원', details)
         if price_match2:
-            price = price_match2.group(1).replace(',', '') + '만원'
+            price = price_match2.group(1).replace(',', '').replace(' ', '') + '만원'
 
     if not title:
         return None

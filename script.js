@@ -416,9 +416,11 @@ ${carInfoStr}
         }
 
         let price = null;
-        const priceMatch = htmlString.match(/(\d{1,5},?\d*)\s*만\s*원/);
+        // HTML 태그 제거 및 공백 정규화
+        const textOnly = htmlString.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+        const priceMatch = textOnly.match(/((?:\d+\s*억\s*)?\d{1,5}(?:,\d{3})*|\d+)\s*만\s*원/);
         if (priceMatch) {
-            price = priceMatch[1].replace(/,/g, '') + '만원';
+            price = priceMatch[1].replace(/,/g, '').replace(/ /g, '') + '만원';
         }
 
         if (!title) return null;
