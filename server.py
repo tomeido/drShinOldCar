@@ -7,6 +7,7 @@ import re
 import json
 import sys
 import io
+import os
 from urllib.parse import urlparse
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -185,4 +186,5 @@ if __name__ == '__main__':
     print('🚗 닥신 소환기 — Scrapling 크롤링 서버 시작')
     print('   http://localhost:5000')
     print('=' * 50)
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() in ('true', '1', 't')
+    app.run(host='0.0.0.0', port=5000, debug=debug_mode)
