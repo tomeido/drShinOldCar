@@ -35,6 +35,17 @@ def extract_car_id(url: str) -> str | None:
     return None
 
 
+def _extract_price_from_text(text: str) -> str | None:
+    """텍스트에서 가격 정보를 추출한다 (예: '3,500만원', '1억 2,500 만원')."""
+    if not text:
+        return None
+    # "3,500만원", "1억 2,500 만원" 등의 패턴 매치
+    price_match = re.search(r'((?:\d+\s*억\s*)?\d{1,5}(?:,\d{3})*|\d+)\s*만\s*원', text)
+    if price_match:
+        return price_match.group(1).replace(',', '').replace(' ', '') + '만원'
+    return None
+
+
 def parse_car_info(page) -> dict | None:
     """
     Scrapling 응답 객체에서 차량 정보를 파싱한다.
@@ -97,20 +108,16 @@ def parse_car_info(page) -> dict | None:
         html_text = page.body.html if hasattr(page, 'body') and page.body else str(page)
     except Exception:
         html_text = str(page)
-        
+
     text_only = re.sub(r'<[^>]*>', ' ', html_text)
-    text_only = re.sub(r'\s+', ' ', text_only) # 공백 정규화 (엔터 등)
-    
-    # "3,500만원", "1억 2,500 만원" 등의 패턴 매치
-    price_match = re.search(r'((?:\d+\s*억\s*)?\d{1,5}(?:,\d{3})*|\d+)\s*만\s*원', text_only)
-    if price_match:
-        price = price_match.group(1).replace(',', '').replace(' ', '') + '만원'
-        
+    text_only = re.sub(r'\s+', ' ', text_only)  # 공백 정규화 (엔터 등)
+
+    # HTML 본문에서 가격 시도
+    price = _extract_price_from_text(text_only)
+
     # og:description에서도 가격 시도 (만약 HTML 본문에서 못 찾았다면)
-    if not price and details:
-        price_match2 = re.search(r'((?:\d+\s*억\s*)?\d{1,5}(?:,\d{3})*|\d+)\s*만\s*원', details)
-        if price_match2:
-            price = price_match2.group(1).replace(',', '').replace(' ', '') + '만원'
+    if not price:
+        price = _extract_price_from_text(details)
 
     if not title:
         return None
