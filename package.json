@@ -1,0 +1,14 @@
+{
+  "name": "dakshin-ai-prompt-generator",
+  "version": "1.0.0",
+  "description": "Dakshin AI Prompt Generator",
+  "main": "script.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "jsdom": "^25.0.0"
+  }
+}
