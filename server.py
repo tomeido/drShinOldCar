@@ -19,7 +19,8 @@ sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='repla
 
 
 app = Flask(__name__)
-CORS(app)  # 프론트엔드에서의 CORS 요청 허용
+# 보안: CORS를 로컬호스트(localhost, 127.0.0.1)로 제한하여 무분별한 접근 방지
+CORS(app, origins=re.compile(r'^https?://(localhost|127\.0\.0\.1)(:\d+)?$'))
 
 
 
