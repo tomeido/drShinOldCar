@@ -357,7 +357,10 @@ ${carInfoStr}
                 const response = await fetch(proxyUrl, { signal: controller.signal });
                 clearTimeout(timeout);
 
-                if (!response.ok) continue;
+                if (!response.ok) {
+                    console.warn(`Proxy response error (${response.status}):`, proxyUrl);
+                    continue;
+                }
 
                 const contentType = response.headers.get('content-type') || '';
                 if (contentType.includes('application/json')) {
