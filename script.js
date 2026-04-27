@@ -277,30 +277,6 @@ ${carInfoStr}
         } catch (e) { return null; }
     };
 
-    /**
-     * 엔카 URL에서 차량 ID(carid)를 추출한다.
-     * 지원 형식:
-     *   - www.encar.com/dc/dc_cardetailview.do?carid=12345678
-     *   - fem.encar.com/cars/detail/12345678
-     */
-    const extractCarId = (url) => {
-        // fem.encar.com 형식
-        const femMatch = url.match(/fem\.encar\.com\/cars\/detail\/(\d+)/);
-        if (femMatch) return femMatch[1];
-
-        // 기존 encar.com 형식 (query string에서 carid 추출)
-        try {
-            const parsed = new URL(url);
-            const carid = parsed.searchParams.get('carid');
-            if (carid && /^\d+$/.test(carid)) return carid;
-        } catch (e) { /* ignore */ }
-
-        // URL 경로나 쿼리에서 숫자 ID 패턴 추출 시도
-        const idMatch = url.match(/[\?&]carid=(\d+)/);
-        if (idMatch) return idMatch[1];
-
-        return null;
-    };
 
     // ─── Scrapling 백엔드 서버 설정 ───
     const BACKEND_URL = 'http://localhost:5000';
@@ -608,3 +584,34 @@ ${carInfoStr}
         }
     });
 });
+
+/**
+ * 엔카 URL에서 차량 ID(carid)를 추출한다.
+ * 지원 형식:
+ *   - www.encar.com/dc/dc_cardetailview.do?carid=12345678
+ *   - fem.encar.com/cars/detail/12345678
+ */
+const extractCarId = (url) => {
+    if (typeof url !== 'string') return null;
+
+    // fem.encar.com 형식
+    const femMatch = url.match(/fem\.encar\.com\/cars\/detail\/(\d+)/);
+    if (femMatch) return femMatch[1];
+
+    // 기존 encar.com 형식 (query string에서 carid 추출)
+    try {
+        const parsed = new URL(url);
+        const carid = parsed.searchParams.get('carid');
+        if (carid && /^\d+$/.test(carid)) return carid;
+    } catch (e) { /* ignore */ }
+
+    // URL 경로나 쿼리에서 숫자 ID 패턴 추출 시도
+    const idMatch = url.match(/[\?&]carid=(\d+)/);
+    if (idMatch) return idMatch[1];
+
+    return null;
+};
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { extractCarId };
+}
