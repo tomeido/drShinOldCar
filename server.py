@@ -21,8 +21,8 @@ sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='repla
 app = Flask(__name__)
 CORS(app)  # 프론트엔드에서의 CORS 요청 허용
 
-
-
+# 글로벌 인메모리 캐시 딕셔너리
+car_cache = {}
 
 def _extract_price_from_text(text: str) -> str | None:
     """텍스트에서 가격 정보를 추출한다 (예: '3,500만원', '1억 2,500 만원')."""
@@ -151,6 +151,11 @@ def encar_crawl():
 
     # 차량 ID 추출하여 fem.encar.com URL로 변환 (더 안정적인 og: 태그 제공)
     car_id = extract_car_id(target_url)
+
+    if car_id and car_id in car_cache:
+        print(f'[Cache] 캐시에서 차량 정보 반환: {car_cache[car_id]["title"]}')
+        return jsonify({'success': True, 'data': car_cache[car_id], 'error': None})
+
     fetch_url = f'https://fem.encar.com/cars/detail/{car_id}' if car_id else target_url
 
     try:
@@ -164,6 +169,8 @@ def encar_crawl():
 
         if car_info:
             print(f'[StealthyFetcher] 차량 정보 추출 성공: {car_info["title"]}')
+            if car_id:
+                car_cache[car_id] = car_info
             return jsonify({'success': True, 'data': car_info, 'error': None})
         else:
             print('[StealthyFetcher] HTML에서 차량 정보를 찾을 수 없음')
