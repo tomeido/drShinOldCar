@@ -4,7 +4,6 @@ Flask + Scrapling을 사용하여 엔카 차량 정보를 크롤링합니다.
 """
 
 import re
-import json
 import sys
 import io
 from urllib.parse import urlparse
