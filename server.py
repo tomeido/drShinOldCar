@@ -7,6 +7,7 @@ import re
 import json
 import sys
 import io
+from urllib.parse import urlparse
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from scrapling.fetchers import StealthyFetcher
@@ -149,7 +150,15 @@ def encar_crawl():
     if not target_url:
         return jsonify({'success': False, 'data': None, 'error': 'URL이 제공되지 않았습니다.'}), 400
 
-    if 'encar.com' not in target_url:
+    try:
+        parsed_url = urlparse(target_url)
+        if parsed_url.scheme not in ['http', 'https']:
+            return jsonify({'success': False, 'data': None, 'error': '유효한 엔카(encar.com) URL이 아닙니다.'}), 400
+
+        hostname = parsed_url.hostname
+        if not hostname or not (hostname == 'encar.com' or hostname.endswith('.encar.com')):
+            return jsonify({'success': False, 'data': None, 'error': '유효한 엔카(encar.com) URL이 아닙니다.'}), 400
+    except Exception:
         return jsonify({'success': False, 'data': None, 'error': '유효한 엔카(encar.com) URL이 아닙니다.'}), 400
 
     # 차량 ID 추출하여 fem.encar.com URL로 변환 (더 안정적인 og: 태그 제공)
