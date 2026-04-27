@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from scrapling.fetchers import StealthyFetcher
+from utils import extract_car_id
 
 # Windows 콘솔 인코딩 문제 해결
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
@@ -21,19 +22,6 @@ app = Flask(__name__)
 CORS(app)  # 프론트엔드에서의 CORS 요청 허용
 
 
-def extract_car_id(url: str) -> str | None:
-    """엔카 URL에서 차량 ID(carid)를 추출한다."""
-    # fem.encar.com 형식
-    fem_match = re.search(r'fem\.encar\.com/cars/detail/(\d+)', url)
-    if fem_match:
-        return fem_match.group(1)
-
-    # 기존 encar.com 형식 (query string에서 carid 추출)
-    carid_match = re.search(r'[?&]carid=(\d+)', url)
-    if carid_match:
-        return carid_match.group(1)
-
-    return None
 
 
 def _extract_price_from_text(text: str) -> str | None:
