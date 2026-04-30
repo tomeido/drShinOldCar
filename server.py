@@ -95,8 +95,11 @@ def parse_car_info(page) -> dict | None:
     # 3) 가격 추출: HTML 태그를 제거하여 "NNN만원" 패턴 찾기
     price = None
     try:
-        html_text = page.body.html if hasattr(page, 'body') and page.body else str(page)
+        html_text = page.body.html if hasattr(page, 'body') and page.body and page.body.html else str(page)
     except Exception:
+        html_text = str(page)
+
+    if html_text is None:
         html_text = str(page)
 
     text_only = re.sub(r'<[^>]*>', ' ', html_text)

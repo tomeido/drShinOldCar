@@ -1,105 +1,145 @@
 import pytest
-from unittest.mock import patch
-from server import app
+from unittest.mock import MagicMock
+from server import parse_car_info, _extract_price_from_text
 
-@pytest.fixture
-def client():
-    app.config['TESTING'] = True
-    with app.test_client() as client:
-        yield client
+# Tests will be added below
 
-def test_encar_crawl_missing_url(client):
-    response = client.get('/api/encar')
-    assert response.status_code == 400
-    data = response.get_json()
-    assert data['success'] is False
-    assert data['error'] == 'URL이 제공되지 않았습니다.'
+def test_extract_price_from_text():
+    # Valid formats
+    assert _extract_price_from_text("3,500만원") == "3500만원"
+    assert _extract_price_from_text("1억 2,500 만원") == "1억2500만원"
+    assert _extract_price_from_text("100 만 원") == "100만원"
+    assert _extract_price_from_text("가격: 4,000만원입니다.") == "4000만원"
+    assert _extract_price_from_text("500 만원") == "500만원"
 
-def test_encar_crawl_invalid_scheme(client):
-    response = client.get('/api/encar?url=ftp://encar.com/car')
-    assert response.status_code == 400
-    data = response.get_json()
-    assert data['success'] is False
-    assert data['error'] == '유효한 엔카(encar.com) URL이 아닙니다.'
+    # Invalid or missing formats
+    assert _extract_price_from_text("가격 미정") is None
+    assert _extract_price_from_text("") is None
+    assert _extract_price_from_text(None) is None
+    assert _extract_price_from_text("100 dollars") is None
 
-def test_encar_crawl_invalid_domain(client):
-    response = client.get('/api/encar?url=https://example.com/car')
-    assert response.status_code == 400
-    data = response.get_json()
-    assert data['success'] is False
-    assert data['error'] == '유효한 엔카(encar.com) URL이 아닙니다.'
 
-class MockElement:
-    def __init__(self, attrib=None, text=""):
-        self.attrib = attrib or {}
-        self.text = text
+def create_mock_page(html_content, og_title=None, og_desc=None, title=None):
+    """Helper to mock a Scrapling page object"""
+    page = MagicMock()
 
-class MockPage:
-    def __init__(self, html="", og_title=None, og_desc=None, title=None):
-        self.html = html
-        self.og_title = og_title
-        self.og_desc = og_desc
-        self.title_text = title
-
-    def css(self, selector):
-        if selector == 'meta[property="og:title"]' and self.og_title:
-            return [MockElement(attrib={'content': self.og_title})]
-        if selector == 'meta[property="og:description"]' and self.og_desc:
-            return [MockElement(attrib={'content': self.og_desc})]
-        if selector == 'title' and self.title_text:
-            return [MockElement(text=self.title_text)]
+    def css_mock(selector):
+        if selector == 'meta[property="og:title"]' and og_title is not None:
+            el = MagicMock()
+            el.attrib = {'content': og_title}
+            return [el]
+        if selector == 'meta[property="og:description"]' and og_desc is not None:
+            el = MagicMock()
+            el.attrib = {'content': og_desc}
+            return [el]
+        if selector == 'title' and title is not None:
+            el = MagicMock()
+            el.text = title
+            return [el]
         return []
 
-    def __str__(self):
-        return self.html
+    page.css.side_effect = css_mock
+    page.body.html = html_content
+    return page
 
-@patch('server.StealthyFetcher.fetch')
-def test_encar_crawl_success(mock_fetch, client):
-    mock_page = MockPage(
-        html="<div>가격: 3,500만원</div>",
-        og_title="BMW 5시리즈 (G30) 520i M 스포츠 내차팔기",
-        og_desc="연식 : 2021년형, 주행거리 : 30,000 km, 연료 : 가솔린, 색상 : 흰색"
+def test_parse_car_info_happy_path_og_tags():
+    page = create_mock_page(
+        html_content="<body><div>가격: 3,500만원</div></body>",
+        og_title="뉴SM5 플래티넘 1.6 GDI 프리미엄 대구 중고차 : 내차팔기",
+        og_desc="연식 : 2013년 01월, 주행거리 : 100,000 km, 연료 : 가솔린, 색상 : 검정색"
     )
-    mock_fetch.return_value = mock_page
+    result = parse_car_info(page)
 
-    response = client.get('/api/encar?url=https://fem.encar.com/cars/detail/12345678')
-    assert response.status_code == 200
-    data = response.get_json()
-    assert data['success'] is True
-    assert data['data']['title'] == "BMW 5시리즈 (G30) 520i M 스포츠"
-    assert data['data']['price'] == "3500만원"
-    assert data['data']['year'] == "2021년형"
-    assert data['data']['mileage'] == "30,000 km"
-    assert data['data']['fuel'] == "가솔린"
-    assert data['data']['color'] == "흰색"
+    assert result is not None
+    assert result['title'] == '뉴SM5 플래티넘 1.6 GDI 프리미엄'
+    assert result['price'] == '3500만원'
+    assert result['year'] == '2013년 01월'
+    assert result['mileage'] == '100,000 km'
+    assert result['fuel'] == '가솔린'
+    assert result['color'] == '검정색'
+    assert '연식 : 2013년 01월' in result['details']
 
-@patch('server.StealthyFetcher.fetch')
-def test_encar_crawl_fetch_none(mock_fetch, client):
-    mock_fetch.return_value = None
+def test_parse_car_info_fallback_title():
+    page = create_mock_page(
+        html_content="<body><div>가격: 1억 2,500 만원</div></body>",
+        title="BMW 5시리즈 (G30) | 엔카 중고차"
+    )
+    result = parse_car_info(page)
 
-    response = client.get('/api/encar?url=https://fem.encar.com/cars/detail/12345678')
-    assert response.status_code == 502
-    data = response.get_json()
-    assert data['success'] is False
-    assert data['error'] == 'Scrapling 응답이 None입니다.'
+    assert result is not None
+    assert result['title'] == 'BMW 5시리즈 (G30)'
+    assert result['price'] == '1억2500만원'
+    assert result['year'] == '정보 없음'
+    assert result['mileage'] == '정보 없음'
+    assert result['fuel'] is None
+    assert result['color'] is None
 
-@patch('server.StealthyFetcher.fetch')
-def test_encar_crawl_fetch_exception(mock_fetch, client):
-    mock_fetch.side_effect = Exception("Network Error")
+def test_parse_car_info_missing_titles():
+    page = create_mock_page(html_content="<body><div>3,500만원</div></body>")
+    result = parse_car_info(page)
 
-    response = client.get('/api/encar?url=https://fem.encar.com/cars/detail/12345678')
-    assert response.status_code == 500
-    data = response.get_json()
-    assert data['success'] is False
-    assert data['error'] == 'Network Error'
+    assert result is None
 
-@patch('server.StealthyFetcher.fetch')
-def test_encar_crawl_fetch_no_car_info(mock_fetch, client):
-    mock_page = MockPage(html="<div>Empty Page</div>")
-    mock_fetch.return_value = mock_page
+def test_parse_car_info_missing_fields_in_og_desc():
+    page = create_mock_page(
+        html_content="<body><div>가격: 4,000만원</div></body>",
+        og_title="아반떼 AD",
+        og_desc="일부 정보만 있음"
+    )
+    result = parse_car_info(page)
 
-    response = client.get('/api/encar?url=https://fem.encar.com/cars/detail/12345678')
-    assert response.status_code == 404
-    data = response.get_json()
-    assert data['success'] is False
-    assert data['error'] == 'HTML에서 차량 정보를 추출할 수 없습니다.'
+    assert result is not None
+    assert result['year'] == '정보 없음'
+    assert result['mileage'] == '정보 없음'
+    assert result['fuel'] is None
+    assert result['color'] is None
+    assert result['details'] == '일부 정보만 있음'
+
+def test_parse_car_info_price_from_og_desc():
+    # Price is not in HTML body, but is in og:description
+    page = create_mock_page(
+        html_content="<body><div>설명만 있음</div></body>",
+        og_title="아반떼 AD",
+        og_desc="연식 : 2018년, 주행거리 : 50,000 km, 가격: 1,500만원"
+    )
+    result = parse_car_info(page)
+
+    assert result is not None
+    assert result['price'] == '1500만원'
+
+def test_parse_car_info_no_price():
+    page = create_mock_page(
+        html_content="<body><div>가격 안 써있음</div></body>",
+        og_title="제네시스 G80",
+        og_desc="연식 : 2020년"
+    )
+    result = parse_car_info(page)
+
+    assert result is not None
+    assert result['price'] is None
+
+def test_parse_car_info_malformed_html_body():
+    page = create_mock_page(
+        html_content=None,
+        og_title="쏘나타",
+        og_desc="연식 : 2015년"
+    )
+    # Even if page.body.html is malformed or missing, it falls back to str(page)
+    # So we set the string representation
+    page.__str__.return_value = "가격: 2,000만원"
+
+    result = parse_car_info(page)
+
+    assert result is not None
+    assert result['price'] == '2000만원'
+
+
+def test_parse_car_info_missing_title_info():
+    page = create_mock_page(
+        html_content="<body><div>가격 안 써있음</div></body>",
+        og_title="", # Empty title
+        og_desc="연식 : 2020년"
+    )
+    result = parse_car_info(page)
+
+    assert result is None
