@@ -348,16 +348,16 @@ ${carInfoStr}
             (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
         ];
 
-        for (const makeUrl of proxies) {
-            try {
-                const proxyUrl = makeUrl(targetUrl);
-                const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), 8000);
+        const fetchPromise = async (makeUrl) => {
+            const proxyUrl = makeUrl(targetUrl);
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 8000);
 
+            try {
                 const response = await fetch(proxyUrl, { signal: controller.signal });
                 clearTimeout(timeout);
 
-                if (!response.ok) continue;
+                if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
 
                 const contentType = response.headers.get('content-type') || '';
                 if (contentType.includes('application/json')) {
@@ -367,10 +367,15 @@ ${carInfoStr}
                 return await response.text();
             } catch (e) {
                 console.warn(`프록시 실패:`, e.message);
-                continue;
+                throw e;
             }
+        };
+
+        try {
+            return await Promise.any(proxies.map(makeUrl => fetchPromise(makeUrl)));
+        } catch (e) {
+            return null;
         }
-        return null;
     };
 
     /**
